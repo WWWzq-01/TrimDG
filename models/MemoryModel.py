@@ -185,8 +185,9 @@ class MemoryModel(torch.nn.Module):
             src_node_embeddings = updated_node_memories[torch.from_numpy(src_node_ids)]
             dst_node_embeddings = updated_node_memories[torch.from_numpy(dst_node_ids)]
 
-        with torch.cuda.device(self.device):
-            torch.cuda.empty_cache()
+        if torch.device(self.device).type == "cuda":
+            with torch.cuda.device(self.device):
+                torch.cuda.empty_cache()
         return src_node_embeddings, dst_node_embeddings
 
     def get_updated_memories(self, node_ids: np.ndarray, node_raw_messages: dict):
@@ -657,6 +658,10 @@ class GraphAttentionEmbedding(nn.Module):
         # note that when using getting values of the ids from Tensor, convert the ndarray to tensor to avoid wrong retrieval
         node_features = node_memories[torch.from_numpy(node_ids)] + self.node_raw_features[torch.from_numpy(node_ids)]
 
+        observer = getattr(self, "reproduction_observer", None)
+        if observer is not None:
+            observer("node_memory_gather", node_ids, node_features)
+
         if current_layer_num == 0:
             return node_features
         else:
@@ -699,6 +704,8 @@ class GraphAttentionEmbedding(nn.Module):
 
             # get edge features, shape (batch_size, num_neighbors, edge_feat_dim)
             neighbor_edge_features = self.edge_raw_features[torch.from_numpy(neighbor_edge_ids)]
+            if observer is not None:
+                observer("neighbor_edge_gather", neighbor_edge_ids, neighbor_edge_features)
             # temporal graph convolution
             # Tensor, output shape (batch_size, node_feat_dim + time_feat_dim)
             output, _ = self.temporal_conv_layers[current_layer_num - 1](node_features=node_conv_features,
