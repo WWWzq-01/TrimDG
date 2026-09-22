@@ -21,6 +21,7 @@ from models.modules import MergeLayer
 from utils.utils import set_random_seed, convert_to_gpu, get_parameter_sizes, create_optimizer
 from utils.utils import get_neighbor_sampler, NegativeEdgeSampler
 from evaluate_models_utils import evaluate_model_link_prediction
+from utils.batch_selector import select_batch_indices
 from utils.metrics import get_link_prediction_metrics
 from utils.DataLoader import get_idx_data_loader, get_link_prediction_data, calculate_temporal_pagerank
 from utils.EarlyStopping import EarlyStopping
@@ -272,9 +273,7 @@ if __name__ == "__main__":
                 if args.batch_sampling and epoch % 5 == 0:
                     # print("positive probabilities", positive_probabilities.shape)
                     # print("predict shape",predicts.shape)
-                    entropy = - (predicts * torch.log(predicts) + (1 - predicts) * torch.log(1 - predicts))[:batch_size]
-                    _, topk_idx = torch.topk(entropy, k=int(args.batch_rate * batch_size))
-                    idx = topk_idx.cpu().numpy()
+                    idx = select_batch_indices(predicts[:batch_size], args.batch_rate)
                     batch_memory[batch_idx] = idx
                 loss = loss_func(input=predicts, target=labels)
 

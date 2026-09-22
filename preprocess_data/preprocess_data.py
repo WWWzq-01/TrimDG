@@ -81,7 +81,8 @@ def reindex(df: pd.DataFrame, bipartite: bool = True):
     return new_df
 
 
-def preprocess_data(dataset_name: str, bipartite: bool = True, node_feat_dim: int = 172):
+def preprocess_data(dataset_name: str, bipartite: bool = True, node_feat_dim: int = 172,
+                    input_csv=None, output_dir=None):
     """
     preprocess the data
     :param dataset_name: str, dataset name
@@ -89,11 +90,14 @@ def preprocess_data(dataset_name: str, bipartite: bool = True, node_feat_dim: in
     :param node_feat_dim: int, dimension of node features
     :return:
     """
-    Path("../processed_data/{}/".format(dataset_name)).mkdir(parents=True, exist_ok=True)
-    PATH = '../DG_data/{}/{}.csv'.format(dataset_name, dataset_name)
-    OUT_DF = '../processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name)
-    OUT_FEAT = '../processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name)
-    OUT_NODE_FEAT = '../processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name)
+    output_dir = Path(output_dir or "../processed_data/{}".format(dataset_name))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    PATH = input_csv or '../DG_data/{}/{}.csv'.format(dataset_name, dataset_name)
+    OUT_DF = output_dir / 'ml_{}.csv'.format(dataset_name)
+    OUT_FEAT = output_dir / 'ml_{}.npy'.format(dataset_name)
+    OUT_NODE_FEAT = output_dir / 'ml_{}_node.npy'.format(dataset_name)
+    if any(path.exists() for path in (OUT_DF, OUT_FEAT, OUT_NODE_FEAT)):
+        raise FileExistsError("Refusing to overwrite processed data")
 
     df, edge_feats = preprocess(PATH)
     new_df = reindex(df, bipartite)
@@ -112,9 +116,9 @@ def preprocess_data(dataset_name: str, bipartite: bool = True, node_feat_dim: in
     print('number of edges ', edge_feats.shape[0] - 1)
     print('number of edge features ', edge_feats.shape[1])
 
-    # new_df.to_csv(OUT_DF)  # edge-list
-    # np.save(OUT_FEAT, edge_feats)  # edge features
-    # np.save(OUT_NODE_FEAT, node_feats)  # node features
+    new_df.to_csv(OUT_DF)  # edge-list
+    np.save(OUT_FEAT, edge_feats)  # edge features
+    np.save(OUT_NODE_FEAT, node_feats)  # node features
 
 
 def check_data(dataset_name: str):
@@ -150,28 +154,34 @@ def check_data(dataset_name: str):
     assert origin_n_feat.shape == n_feat.shape and origin_n_feat.max() == n_feat.max() and origin_n_feat.min() == n_feat.min()
 
 
-parser = argparse.ArgumentParser('Interface for preprocessing datasets')
-parser.add_argument('--dataset_name', type=str,
-                    choices=['wikipedia', 'reddit', 'mooc', 'lastfm', 'myket', 'enron', 'SocialEvo', 'uci',
-                             'Flights', 'CanParl', 'USLegis', 'UNtrade', 'UNvote', 'Contacts'],
-                    help='Dataset name', default='wikipedia')
-parser.add_argument('--node_feat_dim', type=int, default=172, help='Number of node raw features')
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser('Interface for preprocessing datasets')
+    parser.add_argument('--dataset_name', type=str,
+                        choices=['wikipedia', 'reddit', 'mooc', 'lastfm', 'myket', 'enron', 'SocialEvo', 'uci',
+                                 'Flights', 'CanParl', 'USLegis', 'UNtrade', 'UNvote', 'Contacts'],
+                        help='Dataset name', default='wikipedia')
+    parser.add_argument('--node_feat_dim', type=int, default=172, help='Number of node raw features')
 
-args = parser.parse_args()
+    parser.add_argument('--input-csv', help='Explicit original CSV path')
+    parser.add_argument('--output-dir', help='Directory receiving the three processed files')
+    parser.add_argument('--check-original', action='store_true', help='Compare legacy DG_data processed copies')
+    args = parser.parse_args()
 
-print(f'preprocess dataset {args.dataset_name}...')
-if args.dataset_name in ['enron', 'SocialEvo', 'uci']:
-    Path("../processed_data/{}/".format(args.dataset_name)).mkdir(parents=True, exist_ok=True)
-    copy_tree("../DG_data/{}/".format(args.dataset_name), "../processed_data/{}/".format(args.dataset_name))
-    print(f'the original dataset of {args.dataset_name} is unavailable, directly use the processed dataset by previous works.')
-else:
-    # bipartite dataset
-    if args.dataset_name in ['wikipedia', 'reddit', 'mooc', 'lastfm', 'myket']:
-        preprocess_data(dataset_name=args.dataset_name, bipartite=True, node_feat_dim=args.node_feat_dim)
+    print(f'preprocess dataset {args.dataset_name}...')
+    if args.dataset_name in ['enron', 'SocialEvo', 'uci']:
+        Path("../processed_data/{}/".format(args.dataset_name)).mkdir(parents=True, exist_ok=True)
+        copy_tree("../DG_data/{}/".format(args.dataset_name), "../processed_data/{}/".format(args.dataset_name))
+        print(f'the original dataset of {args.dataset_name} is unavailable, directly use the processed dataset by previous works.')
     else:
-        preprocess_data(dataset_name=args.dataset_name, bipartite=False, node_feat_dim=args.node_feat_dim)
-    print(f'{args.dataset_name} is processed successfully.')
+        # bipartite dataset
+        if args.dataset_name in ['wikipedia', 'reddit', 'mooc', 'lastfm', 'myket']:
+            preprocess_data(dataset_name=args.dataset_name, bipartite=True, node_feat_dim=args.node_feat_dim,
+                            input_csv=args.input_csv, output_dir=args.output_dir)
+        else:
+            preprocess_data(dataset_name=args.dataset_name, bipartite=False, node_feat_dim=args.node_feat_dim,
+                            input_csv=args.input_csv, output_dir=args.output_dir)
+        print(f'{args.dataset_name} is processed successfully.')
 
-    if args.dataset_name not in ['myket']:
-        check_data(args.dataset_name)
-    print(f'{args.dataset_name} passes the checks successfully.')
+        if args.check_original:
+            check_data(args.dataset_name)
+            print(f'{args.dataset_name} passes the checks successfully.')

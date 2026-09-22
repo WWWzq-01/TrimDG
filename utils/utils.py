@@ -377,9 +377,9 @@ class NeighborSampler:
             p = np.percentile(n, 80)
             self.max_neighbor_number = int(p)
 
-        previous_edge = np.sum([len(self.nodes_neighbor_ids[i]) for i in range(len(self.nodes_neighbor_ids))])
-        window_size = sample_window_size(self.nodes_neighbor_times, 0.9, "iqr")
         if self.sample_neighbor_strategy == 'our':
+            previous_edge = np.sum([len(self.nodes_neighbor_ids[i]) for i in range(len(self.nodes_neighbor_ids))])
+            window_size = sample_window_size(self.nodes_neighbor_times, 0.9, "iqr")
             for node_idx, per_node_neighbors in enumerate(adj_list):
                 neighbour_size = len(self.nodes_neighbor_times[node_idx])
                 if neighbour_size == 0:

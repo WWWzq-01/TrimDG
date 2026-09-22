@@ -27,6 +27,7 @@ def get_link_prediction_args(is_evaluation: bool = False):
     parser.add_argument('--sample_neighbor_strategy', type=str, default='recent',
                         choices=['uniform', 'recent', 'time_interval_aware'], help='how to sample historical neighbors')
     parser.add_argument('--cache', type=int, default=0, help='Whether we will use cache')
+    parser.add_argument('--bypass', type=float, default=0.0, help='cache bypass probability')
     parser.add_argument('--fast_attention', type=int, default=0, help='Whether we will use fast attention')
     parser.add_argument('--presampling_total_rate', type=float, default=0.6, help='total_presampling_rate')
     parser.add_argument('--time_scaling_factor', default=1e-6, type=float,

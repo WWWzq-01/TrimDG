@@ -67,7 +67,7 @@ class Data:
         self.num_unique_nodes = len(self.unique_node_ids)
 
 
-def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: float):
+def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: float, data_root: str = "."):
     """
     generate data for link prediction task (inductive & transductive settings)
     :param dataset_name: str, dataset name
@@ -77,9 +77,9 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
             full_data, train_data, val_data, test_data, new_node_val_data, new_node_test_data, (Data object)
     """
     # Load data and train val test split
-    graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
-    edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
-    node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name))
+    graph_df = pd.read_csv(os.path.join(data_root, 'processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name)))
+    edge_raw_features = np.load(os.path.join(data_root, 'processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name)))
+    node_raw_features = np.load(os.path.join(data_root, 'processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name)))
 
     NODE_FEAT_DIM = EDGE_FEAT_DIM = 172
     assert NODE_FEAT_DIM >= node_raw_features.shape[
