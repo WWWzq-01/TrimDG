@@ -121,10 +121,11 @@ def preprocess_data(dataset_name: str, bipartite: bool = True, node_feat_dim: in
     np.save(OUT_NODE_FEAT, node_feats)  # node features
 
 
-def check_data(dataset_name: str):
+def check_data(dataset_name: str, processed_dir=None):
     """
     check whether the processed datasets are identical to the given processed datasets
     :param dataset_name: str, dataset name
+    :param processed_dir: directory containing the processed files, or the legacy default
     :return:
     """
     # original data paths
@@ -133,9 +134,10 @@ def check_data(dataset_name: str):
     origin_OUT_NODE_FEAT = '../DG_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name)
 
     # processed data paths
-    OUT_DF = '../processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name)
-    OUT_FEAT = '../processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name)
-    OUT_NODE_FEAT = '../processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name)
+    processed_dir = Path(processed_dir or '../processed_data/{}'.format(dataset_name))
+    OUT_DF = processed_dir / 'ml_{}.csv'.format(dataset_name)
+    OUT_FEAT = processed_dir / 'ml_{}.npy'.format(dataset_name)
+    OUT_NODE_FEAT = processed_dir / 'ml_{}_node.npy'.format(dataset_name)
 
     # Load original data
     origin_g_df = pd.read_csv(origin_OUT_DF)
@@ -169,8 +171,9 @@ if __name__ == '__main__':
 
     print(f'preprocess dataset {args.dataset_name}...')
     if args.dataset_name in ['enron', 'SocialEvo', 'uci']:
-        Path("../processed_data/{}/".format(args.dataset_name)).mkdir(parents=True, exist_ok=True)
-        copy_tree("../DG_data/{}/".format(args.dataset_name), "../processed_data/{}/".format(args.dataset_name))
+        output_dir = Path(args.output_dir or "../processed_data/{}/".format(args.dataset_name))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        copy_tree("../DG_data/{}/".format(args.dataset_name), str(output_dir))
         print(f'the original dataset of {args.dataset_name} is unavailable, directly use the processed dataset by previous works.')
     else:
         # bipartite dataset
@@ -183,5 +186,5 @@ if __name__ == '__main__':
         print(f'{args.dataset_name} is processed successfully.')
 
         if args.check_original:
-            check_data(args.dataset_name)
+            check_data(args.dataset_name, processed_dir=args.output_dir)
             print(f'{args.dataset_name} passes the checks successfully.')
