@@ -61,10 +61,14 @@ class TrainStateTest(unittest.TestCase):
         self.assertGreater(len(self.model[0].memory_bank.node_raw_messages[1]), 0)
         self.assertNotIn(2, observation.published)
 
-    def test_u1_topk_last_message_counterexample(self):
+    def test_u2_preserves_topk_set_and_restores_last_message(self):
         probabilities = torch.tensor([0.1, 0.4, 0.9, 0.5])
-        indices = select_batch_indices(probabilities, 0.5)
+        entropy = -(probabilities * torch.log(probabilities) + (1 - probabilities) * torch.log(1 - probabilities))
+        indices = torch.topk(entropy, k=2).indices.numpy()
+        corrected = select_batch_indices(probabilities, 0.5)
         self.assertEqual(indices.tolist(), [3, 1])
+        self.assertEqual(corrected.tolist(), [1, 3])
+        self.assertEqual(set(indices), set(corrected))
         times = np.array([1., 2., 3., 4.])
         src = np.array([1, 1, 1, 1])[indices]
         dst = np.array([3, 4, 3, 4])[indices]
@@ -73,6 +77,11 @@ class TrainStateTest(unittest.TestCase):
         _, _, last_times = MessageAggregator().aggregate_messages(src, messages)
         self.assertEqual(last_times.tolist(), [2.])
         self.assertEqual(max(times[indices]), 4.)
+        _, corrected_messages = self.model[0].compute_new_node_raw_messages(
+            np.array([1, 1]), np.array([4, 4]), torch.zeros((2, 172)),
+            times[corrected], np.arange(1, 5)[corrected])
+        _, _, corrected_last = MessageAggregator().aggregate_messages(np.array([1, 1]), corrected_messages)
+        self.assertEqual(corrected_last.tolist(), [4.])
 
     def test_recent_does_not_execute_unused_presampling(self):
         with patch('utils.utils.sample_window_size', side_effect=AssertionError('unused our branch')):
@@ -87,17 +96,27 @@ class TrainStateTest(unittest.TestCase):
             raw.write_text('u,i,ts,label,f0,f1\n' + ''.join(
                 '{},{},{},0,1.0,2.0\n'.format(i % 2, (i // 2) % 2, i + 1) for i in range(12)))
             preprocess_data('wikipedia', input_csv=raw, output_dir=root / 'processed_data/wikipedia')
-            args = parse_args(['--data-root', str(root), '--output-dir', str(root / 'result'),
-                               '--variant', 'T0', '--device', 'cpu', '--max-batches', '1',
-                               '--ledger', str(root / 'ledger'), '--gpu-seconds-budget', '30',
-                               '--source-u1', 'test-u1', '--source-u2', 'test-u2'])
-            result = execute(args)
-            self.assertEqual(result['status'], 'complete')
-            self.assertEqual(result['completed_epochs'], 2)
-            self.assertEqual(result['optimizer_steps'], 2)
-            observed = json.loads((root / 'result/observations.json').read_text())
-            self.assertEqual(observed['counts']['full_memory_clone_calls'], 4)
-            self.assertEqual(observed['counts']['raw_messages_stored'], 4 * result['data']['train_events'])
+            for variant in ('T0', 'T1'):
+                args = parse_args(['--data-root', str(root), '--output-dir', str(root / variant),
+                                   '--variant', variant, '--device', 'cpu', '--max-batches', '1',
+                                   '--ledger', str(root / (variant + '-ledger')), '--gpu-seconds-budget', '30',
+                                   '--source-u1', 'test-u1', '--source-u2', 'test-u2'])
+                result = execute(args)
+                self.assertEqual(result['status'], 'complete')
+                self.assertEqual(result['completed_epochs'], 2)
+                self.assertEqual(result['optimizer_steps'], 2)
+                observed = json.loads((root / variant / 'observations.json').read_text())
+                self.assertEqual(observed['counts']['full_memory_clone_calls'], 4)
+                train_events = result['data']['train_events']
+                self.assertEqual(observed['epochs'][0]['train_event_count'], train_events)
+                self.assertEqual(observed['epochs'][1]['train_event_count'], train_events if variant == 'T0' else train_events // 2)
+                self.assertEqual(observed['epochs'][1]['reset_state']['selector_table_batches_before'], int(variant == 'T1'))
+                if variant == 'T1':
+                    self.assertGreater(observed['counts']['sampler_slots_from_skipped_events'], 0)
+                    self.assertTrue(observed['actual_training_samples_of_skipped_events'])
+                    self.assertEqual(observed['counts']['raw_messages_stored'], 3 * train_events)
+                else:
+                    self.assertEqual(observed['counts']['raw_messages_stored'], 4 * train_events)
 
     def test_failed_batch_start_counts_towards_shared_limit(self):
         with tempfile.TemporaryDirectory() as directory:
